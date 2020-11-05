@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Echo CDN Proxy Demo</title>
+    <style>
+      #app {
+        height: 100%;
+        width: 100%;
+        display: flex;
+        position: fixed;
+        align-items: center;
+        justify-content: center;
+      }
+    </style>
+<!--
+    <script src="https://cdn.jsdelivr.net/npm/vue@^2.0.0/dist/vue.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios@0.20.0/dist/axios.min.js"></script>
+-->
+    <script src="vue.min.js"></script>
+    <script src="axios.min.js"></script>
+  </head>
+  <body>
+    <div id="app"><h1>{{ time }}</h1></div>
+  </body>
+  <script type="text/javascript">
+    Vue.config.productionTip = false;
+
+    new Vue({
+      el: "#app",
+      data: {
+        time: ""
+      },
+      methods: {
+        updateTime: function() {
+          axios.get('/time').then(response => {
+            this.time = response.data
+            setTimeout(this.updateTime, 1000);
+          })
+          .catch(error => {
+            console.error(error.response);
+          })
+        }
+      },
+      beforeMount: function() {
+        this.updateTime()
+      }
+    });
+  </script>
+</html>

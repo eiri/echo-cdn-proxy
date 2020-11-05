@@ -4,6 +4,9 @@
 *.dll
 *.so
 *.dylib
+echo-cdn-proxy
+example/frontend/*.js
+example/frontend/*.map
 
 # Test binary, built with `go test -c`
 *.test
