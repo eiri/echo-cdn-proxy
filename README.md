@@ -1,6 +1,6 @@
 # echo-cdn-proxy
 
-![Build Status](https://github.com/eiri/echo-cdn-proxy/workflows/build/badge.svg)
+[![Build Status](https://github.com/eiri/echo-cdn-proxy/workflows/build/badge.svg)](https://github.com/eiri/echo-cdn-proxy/actions)
 
 ## Summary
 
