@@ -24,7 +24,8 @@ func main() {
     e := echo.New()
 
     // Configure the middleware
-    e.Use(cdnproxy.Proxy)
+    cfg := cdnproxy.NewConfig("https://cdn.jsdelivr.net", "/npm")
+    e.Use(cfg.Proxy)
 
     // Start the server
     e.Logger.Fatal(e.Start(":8000"))
@@ -32,7 +33,7 @@ func main() {
 ```
 
 ```bash
-$ curl http://localhost:8000/vue.js
+$ curl http://localhost:8000/npm/vue/dist/vue.min.js
 ...
 ```
 
@@ -44,10 +45,18 @@ $ cd echo-cdn-proxy
 $ make test
 go build ./...
 go test -v ./...
-=== RUN   TestProxyHandler
---- PASS: TestProxyHandler (0.00s)
+=== RUN   TestProxy
+=== RUN   TestProxy/echo_router_simple
+=== RUN   TestProxy/echo_router_with_static
+=== RUN   TestProxy/echo_router_with_prefix_clash
+--- PASS: TestProxy (0.00s)
+    --- PASS: TestProxy/echo_router_simple (0.00s)
+    --- PASS: TestProxy/echo_router_with_static (0.00s)
+    --- PASS: TestProxy/echo_router_with_prefix_clash (0.00s)
+=== RUN   TestProxyNotFound
+--- PASS: TestProxyNotFound (0.00s)
 PASS
-ok      github.com/eiri/echo-cdn-proxy  0.534s
+ok      github.com/eiri/echo-cdn-proxy  0.274s
 ```
 
 ## License
