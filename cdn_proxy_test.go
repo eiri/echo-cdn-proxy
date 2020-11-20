@@ -1,32 +1,100 @@
 package cdnproxy_test
 
 import (
+	"fmt"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
-	"time"
 
 	"github.com/eiri/echo-cdn-proxy"
+
 	"github.com/labstack/echo/v4"
-	"github.com/steinfletcher/apitest"
-	"github.com/steinfletcher/apitest-jsonpath"
+	"github.com/stretchr/testify/assert"
 )
 
-func TestProxyHandler(t *testing.T) {
-	e := echo.New()
-	e.Use(cdnproxy.Proxy)
-	e.GET("/time", func(c echo.Context) error {
-		now := map[string]string{
-			"time": time.Now().Format("15:04:05"),
-		}
-		return c.JSON(http.StatusOK, now)
-	})
+// TestProxy verifies that proxy works with different router configs
+func TestProxy(t *testing.T) {
+	cdn := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", echo.MIMEApplicationJavaScriptCharsetUTF8)
+		fmt.Fprint(w, `/* fakelib v0.20.0 */`)
+	}))
+	defer cdn.Close()
 
-	apitest.New().
-		Handler(e).
-		Get("/time").
-		Expect(t).
-		Status(http.StatusOK).
-		Header("X-Proxy", "CDN").
-		Assert(jsonpath.Present(`$.time`)).
-		End()
+	var req *http.Request
+	var rec *httptest.ResponseRecorder
+	echoes := map[string]*echo.Echo{
+		"echo router simple":            echoSimple(cdn),
+		"echo router with static":       echoStatic(cdn),
+		"echo router with prefix clash": echoClash(cdn),
+	}
+
+	for tName, e := range echoes {
+		t.Run(tName, func(t *testing.T) {
+			// does proxy to our fake CDN
+			req = httptest.NewRequest(http.MethodGet, "/npm/fakelib.min.js", nil)
+			rec = httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusOK, rec.Code)
+			assert.Equal(t, echo.MIMEApplicationJavaScriptCharsetUTF8, rec.Header().Get("Content-Type"))
+			assert.Equal(t, `/* fakelib v0.20.0 */`, rec.Body.String())
+
+			// still can access other routes
+			req = httptest.NewRequest(http.MethodGet, "/api", nil)
+			rec = httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusOK, rec.Code)
+			assert.Equal(t, echo.MIMEApplicationJSONCharsetUTF8, rec.Header().Get("Content-Type"))
+			assert.Equal(t, `{"ok":true}`, strings.TrimRight(rec.Body.String(), "\n"))
+		})
+	}
+}
+
+// TestProxyNotFound verifies that error codes proxied through
+func TestProxyNotFound(t *testing.T) {
+	cdn := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", echo.MIMETextPlain)
+		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprint(w, `not found`)
+	}))
+	defer cdn.Close()
+
+	e := echoSimple(cdn)
+
+	req := httptest.NewRequest(http.MethodGet, "/npm/fakelib.min.js", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+	assert.Equal(t, echo.MIMETextPlain, rec.Header().Get("Content-Type"))
+	assert.Equal(t, `not found`, strings.TrimRight(rec.Body.String(), "\n"))
+
+}
+
+// helper functions
+
+func echoSimple(cdn *httptest.Server) *echo.Echo {
+	e := echo.New()
+	cfg := cdnproxy.NewConfig(cdn.URL, "/npm")
+	e.Use(cfg.Proxy)
+	e.GET("/api", func(c echo.Context) error {
+		return c.JSON(http.StatusOK, map[string]bool{"ok": true})
+	})
+	return e
+}
+
+func echoStatic(cdn *httptest.Server) *echo.Echo {
+	e := echoSimple(cdn)
+	e.Static("/", ".")
+	return e
+}
+
+func echoClash(cdn *httptest.Server) *echo.Echo {
+	e := echoSimple(cdn)
+	e.GET("/npm/*", func(c echo.Context) error {
+		return c.JSON(http.StatusOK, map[string]bool{"ok": true})
+	})
+	return e
 }

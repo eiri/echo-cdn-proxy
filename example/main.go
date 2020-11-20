@@ -22,7 +22,8 @@ func main() {
 	e.Use(middleware.Recover())
 
 	// Configure the middleware
-	e.Use(cdnproxy.Proxy)
+	cfg := cdnproxy.NewConfig("https://cdn.jsdelivr.net", "/npm")
+	e.Use(cfg.Proxy)
 
 	// Serve static content
 	e.Static("/", "example/frontend")
