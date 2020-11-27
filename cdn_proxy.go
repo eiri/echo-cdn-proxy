@@ -6,15 +6,24 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/labstack/echo/v4"
+	"github.com/patrickmn/go-cache"
 )
+
+// Entry is a Cache entry for CDN file
+type Entry struct {
+	CType string
+	Data  []byte
+}
 
 // Config keeps proxy configuration
 type Config struct {
 	CDN    *url.URL
 	Prefix string
 	Client *http.Client
+	Cache  *cache.Cache
 }
 
 // NewConfig returns new proxy configured with given CDN and prefix
@@ -25,10 +34,12 @@ func NewConfig(baseURL, prefix string) Config {
 	}
 	// add a tracer to the round-tripper later
 	client := &http.Client{Transport: http.DefaultTransport}
+	cache := cache.New(cache.NoExpiration, 10*time.Minute)
 	return Config{
 		CDN:    cdn,
 		Prefix: prefix,
 		Client: client,
+		Cache:  cache,
 	}
 }
 
@@ -51,6 +62,13 @@ func (cfg Config) Proxy(next echo.HandlerFunc) echo.HandlerFunc {
 		}
 
 		cfg.CDN.Path = p
+
+		if e, ok := cfg.Cache.Get(p); ok {
+			c.Logger().Debugf("cache hit for %s", p)
+			entry := e.(Entry)
+			return c.Blob(http.StatusOK, entry.CType, entry.Data)
+		}
+
 		c.Logger().Debugf("request %s", cfg.CDN.String())
 
 		resp, err := cfg.Client.Get(cfg.CDN.String())
@@ -64,11 +82,14 @@ func (cfg Config) Proxy(next echo.HandlerFunc) echo.HandlerFunc {
 			return err
 		}
 
-		contentType, ok := resp.Header["Content-Type"]
-		if !ok {
-			contentType = []string{echo.MIMETextPlain}
+		entry := Entry{Data: data}
+		if contentType, ok := resp.Header["Content-Type"]; ok {
+			entry.CType = contentType[0]
+		} else {
+			entry.CType = echo.MIMETextPlain
 		}
+		cfg.Cache.Set(p, entry, cache.NoExpiration)
 
-		return c.Blob(resp.StatusCode, contentType[0], data)
+		return c.Blob(resp.StatusCode, entry.CType, entry.Data)
 	}
 }
