@@ -73,6 +73,30 @@ func TestProxyNotFound(t *testing.T) {
 
 }
 
+// TestProxyCache verifies that proxy caches CDN requests
+func TestProxyCache(t *testing.T) {
+	reqN := 1
+	cdn := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", echo.MIMEApplicationJavaScriptCharsetUTF8)
+		fmt.Fprintf(w, "req %d", reqN)
+		reqN++
+	}))
+	defer cdn.Close()
+
+	e := echoSimple(cdn)
+
+	req := httptest.NewRequest(http.MethodGet, "/npm/fakelib.min.js", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	// hit it three times, make sure reqN hasn't iterated
+	for i := 1; i <= 3; i++ {
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Equal(t, echo.MIMEApplicationJavaScriptCharsetUTF8, rec.Header().Get("Content-Type"))
+		assert.Equal(t, "req 1", strings.TrimRight(rec.Body.String(), "\n"))
+	}
+}
+
 // helper functions
 
 func echoSimple(cdn *httptest.Server) *echo.Echo {
