@@ -2,6 +2,8 @@ package main
 
 import (
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/eiri/echo-cdn-proxy"
@@ -26,7 +28,13 @@ func main() {
 	e.Use(cfg.Proxy)
 
 	// Serve static content
-	e.Static("/", "example/frontend")
+	server, err := os.Executable()
+	if err != nil {
+		e.Logger.Fatal(err)
+	}
+	path := filepath.Join(filepath.Dir(server), "frontend")
+	e.Logger.Info(path)
+	e.Static("/", path)
 
 	// Serve dynamic content
 	e.GET("/time", func(c echo.Context) error {
@@ -34,5 +42,9 @@ func main() {
 	})
 
 	// Start the server
-	e.Logger.Fatal(e.Start(":8000"))
+	port, ok := os.LookupEnv("PORT")
+	if !ok {
+		port = "8000"
+	}
+	e.Logger.Fatal(e.Start(":" + port))
 }
